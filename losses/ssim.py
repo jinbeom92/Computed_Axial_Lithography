@@ -1,4 +1,3 @@
-# /mnt/data/ssim.py
 from typing import Tuple
 
 import torch
@@ -25,7 +24,7 @@ class SSIMLoss(nn.Module):
         K1: float = 0.01,
         K2: float = 0.03,
         boundary_value: float = 0.8,
-        void_weight: float = 0.0,
+        void_weight: float = 0.1,
     ):
         super().__init__()
         self.window_size = int(window_size)
@@ -119,8 +118,8 @@ class SSIMLoss(nn.Module):
         ssim_mean = (ssim_map * m_eff).sum(dim=(1, 2, 3)) / (m_eff.sum(dim=(1, 2, 3)) + eps)
         base = 1.0 - ssim_mean
         if self.void_weight > 0.0:
-            m_void = (m_eff <= 0.0).to(dtype=x.dtype)
-            vden = m_void.sum(dim=(1,2,3)).to(dtype=x.dtype).clamp_min(1.0)
-            l_void = ((x**2) * m_void).sum(dim=(1,2,3)) / vden
+            void = (tgt_mod <= 0).to(dtype=x.dtype, device=x.device)
+            vden = void.sum(dim=(1,2,3)).to(x.dtype).clamp_min(1.0)
+            l_void = ((x**2) * void).sum(dim=(1,2,3)) / vden
             return (base + self.void_weight * l_void).mean()
         return base.mean()

@@ -1,4 +1,3 @@
-# /mnt/data/mse.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -62,8 +61,9 @@ class MSELoss(nn.Module):
         den = mask.sum(dim=(1, 2, 3)).to(dtype=R_hat.dtype).clamp_min(1.0)
         base = (num / den).mean()
         if self.void_weight > 0.0:
+            ring = (gt_mod > 0) & (gt_mod < 1)
             void = (gt_mod <= 0.0).to(dtype=R_hat.dtype)
             vden = void.sum(dim=(1,2,3)).to(dtype=R_hat.dtype).clamp_min(1.0)
-            l_void = ((R_hat**2) * void).sum(dim=(1,2,3)) / vden
+            l_void = ((R_hat**2) * void.to(R_hat.dtype)).sum(dim=(1,2,3)) / vden
             return base + self.void_weight * l_void.mean()
         return base

@@ -46,6 +46,7 @@ _decoder= _load_local("decoder.py","decoder")
 Enc1D, Enc2D, CheatEnc2D = _enc1d.Enc1D, _enc2d.Enc2D, _enc2d.CheatEnc2D
 Fusion, ALign, Decoder = _fusion.Fusion, _align.ALign, _decoder.DecoderSino
 
+
 @torch.jit.script
 def soft_cap(x: torch.Tensor, cap: torch.Tensor, tau: float = 0.02) -> torch.Tensor:
     """
@@ -60,14 +61,12 @@ def soft_cap(x: torch.Tensor, cap: torch.Tensor, tau: float = 0.02) -> torch.Ten
 def calibrate_sino(sino_raw: torch.Tensor, sino_ref: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
 
     # Peak-based scale
-    peak_ref = sino_ref.amax(dim=(2, 3), keepdim=True)                          # (B,1,1,1)
-    peak_raw = sino_raw.amax(dim=(2, 3), keepdim=True).clamp_min(eps)           # (B,1,1,1)
-    s_peak   = peak_ref / peak_raw                                              # (B,1,1,1)
+    peak_ref = sino_ref.amax(dim=(2, 3), keepdim=True).detach()                 # (B,1,1,1)
+    peak_raw = sino_raw.amax(dim=(2, 3), keepdim=True).detach().clamp_min(eps)  # (B,1,1,1)
 
     # Energy-based scale (sum)
-    sum_ref = sino_ref.sum(dim=(2, 3), keepdim=True)                            # (B,1,1,1)
-    sum_raw = sino_raw.sum(dim=(2, 3), keepdim=True).clamp_min(eps)             # (B,1,1,1)
-    s_sum   = sum_ref / sum_raw                                                 # (B,1,1,1)
+    sum_ref = sino_ref.sum(dim=(2, 3), keepdim=True).detach()                   # (B,1,1,1)
+    sum_raw = sino_raw.sum(dim=(2, 3), keepdim=True).detach().clamp_min(eps)    # (B,1,1,1)
 
     # Use the strongest downscale; never upscale
     s = (sum_ref / sum_raw).clamp_max(1.0) # energy
@@ -75,7 +74,7 @@ def calibrate_sino(sino_raw: torch.Tensor, sino_ref: torch.Tensor, eps: float = 
 
     # Apply scale, keep nonnegativity, and final peak hard-cap
     out = (sino_raw * s).clamp_min(0.0)
-    out = torch.minimum(out, peak_ref) # out = soft_cap(out, peak_ref, tau=0.02), out = torch.minimum(out, peak_ref)
+    out = soft_cap(out, peak_ref, tau=0.02) # out = soft_cap(out, peak_ref, tau=0.02), out = torch.minimum(out, peak_ref)
     return out
 
 # FBP
@@ -122,7 +121,7 @@ class SVTR(nn.Module):
         self.decoder = Decoder(in_ch=align_out, hidden_ch=dec_hidden)
         self.bp_filter = bp_filter
         self.bp_out    = bp_out
-        self.skip_alpha = nn.Parameter(torch.tensor(1.0))
+        self.skip_alpha = nn.Parameter(torch.tensor(0.0))
 
     def _forward_4d(self, sino_xa: torch.Tensor, cheat_xy: Optional[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         """Core pipeline for one z-slice batch: (B,1,X,A)[,(B,1,X,Y)] → (sino_opt,recon_opt)."""

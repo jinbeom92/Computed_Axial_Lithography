@@ -107,10 +107,10 @@ def _build_sampling_grid(Xdet: int, A: int, out_size: Optional[int], ref: torch.
     H = int(Xdet if out_size is None else out_size)
     device, dtype = ref.device, ref.dtype
 
-    radius = H // 2
+    center_xy = 0.5 * float(H - 1)
     # create on CPU then move; avoid 'device=' in factory during scripting
-    yy = torch.arange(H, dtype=torch.float32) - float(radius)   # CPU
-    xx = torch.arange(H, dtype=torch.float32) - float(radius)   # CPU
+    yy = torch.arange(H, dtype=torch.float32) - center_xy
+    xx = torch.arange(H, dtype=torch.float32) - center_xy
     yy = yy.to(dtype=dtype, device=device)
     xx = xx.to(dtype=dtype, device=device)
 
@@ -173,7 +173,7 @@ def fbp2d(sino: torch.Tensor, output_size: Optional[int] = None, filter_name: st
     xx = torch.arange(H, dtype=torch.float32) - 0.5 * float(H - 1)
     r  = 0.5 * float(H - 1)
     Y, X = torch.meshgrid(yy, xx, indexing="ij")
-    mask = ((Y**2 + X**2) <= (r * r))
+    mask = ((Y**2 + X**2) <= (r * r)).to(dtype=samp.dtype, device=samp.device)
     recon = (samp * (math.pi / (2.0 * float(max(1, A))))) * mask
     
     return recon

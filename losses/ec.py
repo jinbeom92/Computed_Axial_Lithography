@@ -1,4 +1,3 @@
-# /mnt/data/ec.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,7 +17,7 @@ class ContrastLoss(nn.Module):
         R_hat, V_gt: [B, 1, H, W]
     """
 
-    def __init__(self, void_weight: float = 0.0):
+    def __init__(self, void_weight: float = 0.1):
         super().__init__()
         self.void_weight = float(void_weight)
         ker = torch.ones((1, 1, 3, 3), dtype=torch.float32)
@@ -61,8 +60,11 @@ class ContrastLoss(nn.Module):
         base = (1.0 - ec) * 0.5
         if self.void_weight > 0.0:
             m = (V_gt > 0.0)
-            outN = (~m).to(dtype=x.dtype)
-            vden = outN.sum(dim=(2,3)).clamp_min(1.0)
-            l_void = ((x**2) * outN).sum(dim=(2,3)) / vden
+            cnt_in = F.conv2d(m.to(x.dtype), self.ker.to(x.device, x.dtype), padding=1)
+            ring_out = (~m) & (cnt_in > 0)
+            out_strict = (~m) & (~ring_out)
+            out_strict = out_strict.to(x.dtype)
+            vden = out_strict.sum(dim=(2,3)).clamp_min(1.0)
+            l_void = ((x**2) * out_strict).sum(dim=(2,3)) / vden
             return (base + self.void_weight * l_void).mean()
         return base.mean()

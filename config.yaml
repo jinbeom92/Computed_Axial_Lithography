@@ -14,7 +14,7 @@ model:
   decoder_hidden: 96
   cheat:
     enabled: true        # true to enable cheat encoder injection
-    train_only: true      # disable cheat on validation/eval
+    train_only: false      # disable cheat on validation/eval
     out_ch: 64
 bp:
   filter: hamming         # ramp | shepp-logan | cosine | hamming | hann | null
@@ -34,9 +34,9 @@ train:
   grad_clip: 1.0
 
 loss_weights:
-  w_mse: 0.3
-  w_ec:  0.3
-  w_ssim: 0.8
+  w_mse: 0.05
+  w_ec:  0.5
+  w_ssim: 1.0
 
 save:
   dir: results/ckpt
