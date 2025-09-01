@@ -23,7 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 import importlib.util
 from typing import Optional, Tuple
-import numpy as np
+import torch.nn.functional as F
 
 import torch
 import torch.nn as nn
@@ -47,6 +47,16 @@ Enc1D, Enc2D, CheatEnc2D = _enc1d.Enc1D, _enc2d.Enc2D, _enc2d.CheatEnc2D
 Fusion, ALign, Decoder = _fusion.Fusion, _align.ALign, _decoder.DecoderSino
 
 @torch.jit.script
+def soft_cap(x: torch.Tensor, cap: torch.Tensor, tau: float = 0.02) -> torch.Tensor:
+    """
+    Smooth cap: out ≈ min(x, cap) with nonzero gradients near the cap.
+    tau: softness; smaller -> harder cap.
+    """
+    # cap - softplus(cap - x, beta=1/tau) ∈ (-inf, cap), monotone, C^1
+    beta = 1.0 / tau
+    return cap - F.softplus(cap - x, beta=beta)
+
+@torch.jit.script
 def calibrate_sino(sino_raw: torch.Tensor, sino_ref: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
 
     # Peak-based scale
@@ -60,11 +70,12 @@ def calibrate_sino(sino_raw: torch.Tensor, sino_ref: torch.Tensor, eps: float = 
     s_sum   = sum_ref / sum_raw                                                 # (B,1,1,1)
 
     # Use the strongest downscale; never upscale
-    s = torch.minimum(s_peak, s_sum).clamp_max(1.0)                             # (B,1,1,1)
+    s = (sum_ref / sum_raw).clamp_max(1.0) # energy
+    # s = (peak_ref / peak_raw).clamp_max(1.0) # peak
 
     # Apply scale, keep nonnegativity, and final peak hard-cap
     out = (sino_raw * s).clamp_min(0.0)
-    out = torch.minimum(out, peak_ref)                                          # hard cap by reference peak
+    out = torch.minimum(out, peak_ref) # out = soft_cap(out, peak_ref, tau=0.02), out = torch.minimum(out, peak_ref)
     return out
 
 # FBP

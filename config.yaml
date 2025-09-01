@@ -34,9 +34,9 @@ train:
   grad_clip: 1.0
 
 loss_weights:
-  w_mse: 0.7
+  w_mse: 0.3
   w_ec:  0.3
-  w_ssim: 0.0
+  w_ssim: 0.8
 
 save:
   dir: results/ckpt

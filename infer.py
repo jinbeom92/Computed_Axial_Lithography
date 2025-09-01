@@ -96,6 +96,7 @@ def infer_case(
     # Convert (H,H,Z)/(X,Y,Z) -> [Z,1,H,W]
     R_hat_4d = torch.from_numpy(ro_vol).permute(2, 0, 1).unsqueeze(1).to(device=device, dtype=torch.float32)
     V_gt_4d  = torch.from_numpy(voxel).permute(2, 0, 1).unsqueeze(1).to(device=device, dtype=torch.float32)
+    V_gt_4d  = (V_gt_4d == 1.0).to(torch.float32) if not V_gt_4d.is_floating_point() else (V_gt_4d > 0.5).to(torch.float32)
 
     # Instantiate losses once (TorchScript-friendly, torch-only)
     crit_ssim = SSIMLoss(boundary_value=0.8).to(device)

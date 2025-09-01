@@ -126,8 +126,8 @@ def _build_sampling_grid(Xdet: int, A: int, out_size: Optional[int], ref: torch.
     # t = y cosθ - x sinθ  → (H,H,A)
     t = ypr[..., None] * c[None, None, :] - xpr[..., None] * s[None, None, :]
 
-    center = Xdet // 2
-    t_idx = t + float(center)
+    center = 0.5 * float(Xdet - 1)
+    t_idx  = t + center
     det_den = float(max(1, Xdet - 1))
     t_norm = 2.0 * (t_idx / det_den) - 1.0
 
@@ -169,10 +169,11 @@ def fbp2d(sino: torch.Tensor, output_size: Optional[int] = None, filter_name: st
     recon = samp * scale
     
     # circle mask
-    yy = torch.arange(H, dtype=torch.float32) - (H//2)
-    xx = torch.arange(H, dtype=torch.float32) - (H//2)
+    yy = torch.arange(H, dtype=torch.float32) - 0.5 * float(H - 1)
+    xx = torch.arange(H, dtype=torch.float32) - 0.5 * float(H - 1)
+    r  = 0.5 * float(H - 1)
     Y, X = torch.meshgrid(yy, xx, indexing="ij")
-    mask = ((Y**2 + X**2) <= float((H//2)**2)).to(radon_filtered.dtype).to(radon_filtered.device)
+    mask = ((Y**2 + X**2) <= (r * r))
     recon = (samp * (math.pi / (2.0 * float(max(1, A))))) * mask
     
     return recon

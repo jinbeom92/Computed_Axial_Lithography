@@ -16,9 +16,10 @@ class MSELoss(nn.Module):
         R_hat, V_gt: [B, 1, H, W]
     """
 
-    def __init__(self, boundary_value: float = 0.8):
+    def __init__(self, boundary_value: float = 0.8, void_weight: float = 0.0):
         super().__init__()
         self.boundary_value = float(boundary_value)
+        self.void_weight = float(void_weight)
         ker = torch.ones((1, 1, 3, 3), dtype=torch.float32)
         ker[0, 0, 1, 1] = 0.0  # 8-neighborhood, no center
         self.register_buffer("ker", ker)
@@ -59,4 +60,10 @@ class MSELoss(nn.Module):
         diff2 = (R_hat - gt_mod) ** 2
         num = (diff2 * mask.to(dtype=R_hat.dtype)).sum(dim=(1, 2, 3))
         den = mask.sum(dim=(1, 2, 3)).to(dtype=R_hat.dtype).clamp_min(1.0)
-        return (num / den).mean()
+        base = (num / den).mean()
+        if self.void_weight > 0.0:
+            void = (gt_mod <= 0.0).to(dtype=R_hat.dtype)
+            vden = void.sum(dim=(1,2,3)).to(dtype=R_hat.dtype).clamp_min(1.0)
+            l_void = ((R_hat**2) * void).sum(dim=(1,2,3)) / vden
+            return base + self.void_weight * l_void.mean()
+        return base

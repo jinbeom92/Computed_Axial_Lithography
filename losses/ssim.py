@@ -25,6 +25,7 @@ class SSIMLoss(nn.Module):
         K1: float = 0.01,
         K2: float = 0.03,
         boundary_value: float = 0.8,
+        void_weight: float = 0.0,
     ):
         super().__init__()
         self.window_size = int(window_size)
@@ -33,6 +34,7 @@ class SSIMLoss(nn.Module):
         self.K1 = float(K1)
         self.K2 = float(K2)
         self.boundary_value = float(boundary_value)
+        self.void_weight = float(void_weight)
 
         ker = torch.ones((1, 1, 3, 3), dtype=torch.float32)
         ker[0, 0, 1, 1] = 0.0  # 8-neighborhood, no center
@@ -115,5 +117,10 @@ class SSIMLoss(nn.Module):
         ssim_map = num / (den + eps)
 
         ssim_mean = (ssim_map * m_eff).sum(dim=(1, 2, 3)) / (m_eff.sum(dim=(1, 2, 3)) + eps)
-        loss = 1.0 - ssim_mean
-        return loss.mean()
+        base = 1.0 - ssim_mean
+        if self.void_weight > 0.0:
+            m_void = (m_eff <= 0.0).to(dtype=x.dtype)
+            vden = m_void.sum(dim=(1,2,3)).to(dtype=x.dtype).clamp_min(1.0)
+            l_void = ((x**2) * m_void).sum(dim=(1,2,3)) / vden
+            return (base + self.void_weight * l_void).mean()
+        return base.mean()
