@@ -10,7 +10,7 @@ Cheat voxel encoder:
 - Output: (B, C_out, X, Y)
 
 Design:
-- Two Residual2D blocks with GELU activations.
+- Two Residual2D blocks with RELU activations.
 - GroupNorm with 1 group (robust w.r.t. channel counts, TorchScript-friendly).
 - Kaiming initialization for stable training.
 """

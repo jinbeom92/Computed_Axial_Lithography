@@ -46,6 +46,27 @@ _decoder= _load_local("decoder.py","decoder")
 Enc1D, Enc2D, CheatEnc2D = _enc1d.Enc1D, _enc2d.Enc2D, _enc2d.CheatEnc2D
 Fusion, ALign, Decoder = _fusion.Fusion, _align.ALign, _decoder.DecoderSino
 
+@torch.jit.script
+def calibrate_sino(sino_raw: torch.Tensor, sino_ref: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+
+    # Peak-based scale
+    peak_ref = sino_ref.amax(dim=(2, 3), keepdim=True)                          # (B,1,1,1)
+    peak_raw = sino_raw.amax(dim=(2, 3), keepdim=True).clamp_min(eps)           # (B,1,1,1)
+    s_peak   = peak_ref / peak_raw                                              # (B,1,1,1)
+
+    # Energy-based scale (sum)
+    sum_ref = sino_ref.sum(dim=(2, 3), keepdim=True)                            # (B,1,1,1)
+    sum_raw = sino_raw.sum(dim=(2, 3), keepdim=True).clamp_min(eps)             # (B,1,1,1)
+    s_sum   = sum_ref / sum_raw                                                 # (B,1,1,1)
+
+    # Use the strongest downscale; never upscale
+    s = torch.minimum(s_peak, s_sum).clamp_max(1.0)                             # (B,1,1,1)
+
+    # Apply scale, keep nonnegativity, and final peak hard-cap
+    out = (sino_raw * s).clamp_min(0.0)
+    out = torch.minimum(out, peak_ref)                                          # hard cap by reference peak
+    return out
+
 # FBP
 from physics.bp import fbp2d, fbp3d
 
@@ -101,7 +122,8 @@ class SVTR(nn.Module):
         a  = self.align(f, cfeat)                # (B,Ao,X,A)
         sino_opt = self.decoder(a)               # (B,1,X,A)  ≥ 0
         sino_pred = self.decoder(a)
-        sino_opt  = torch.clamp(sino_pred + self.skip_alpha * sino_xa, min=0.0)
+        sino_raw = torch.clamp(sino_pred + self.skip_alpha * sino_xa, min=0.0)  # (B,1,X,A)
+        sino_opt = calibrate_sino(sino_raw, sino_xa)
         recon_opt = fbp2d(sino_opt, output_size=self.bp_out, filter_name=self.bp_filter)
         recon_opt = recon_opt.clamp(0, 1)
         return sino_opt, recon_opt

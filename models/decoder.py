@@ -15,7 +15,7 @@ import torch.nn as nn
 
 
 class Residual2D(nn.Module):
-    """Residual 2D block with GroupNorm + GELU and mandatory skip."""
+    """Residual 2D block with GroupNorm + RELU and mandatory skip."""
     def __init__(self, in_ch: int, hidden_ch: int, out_ch: int, k: int = 3):
         super().__init__()
         p = k // 2
