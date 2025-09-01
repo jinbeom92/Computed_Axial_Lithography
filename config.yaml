@@ -1,0 +1,42 @@
+# Minimal, YAML-driven config for SVTR training
+
+data:
+  sino_dir: data/sino
+  voxel_dir: data/voxel
+  batch_size: 4           # use 1 if spatial sizes vary across cases
+  num_workers: 4
+
+model:
+  c1d: 64
+  c2d: 64
+  fusion_out: 64
+  align_out: 64
+  decoder_hidden: 96
+  cheat:
+    enabled: true        # true to enable cheat encoder injection
+    train_only: true      # disable cheat on validation/eval
+    out_ch: 64
+bp:
+  filter: hamming         # ramp | shepp-logan | cosine | hamming | hann | null
+  output_size: null       # null→use X (detector bins)
+
+optim:
+  lr: 1.0e-3
+  weight_decay: 1.0e-2
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+train:
+  epochs: 500
+  val_split: 0.2
+  seed: 2025
+  device: auto            # auto | cuda | cpu
+  grad_clip: 1.0
+
+loss_weights:
+  w_mse: 0.7
+  w_ec:  0.3
+  w_ssim: 0.0
+
+save:
+  dir: results/ckpt
