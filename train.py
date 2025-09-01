@@ -10,7 +10,7 @@ import yaml
 import torch
 import torch.nn as nn
 from torch.jit._trace import TracerWarning
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, Subset
 from tqdm import tqdm
 
 # -----------------------------
@@ -42,16 +42,51 @@ def as_inside_mask(voxel: torch.Tensor) -> torch.Tensor:
 
 
 def make_loaders(cfg: Dict) -> Tuple[DataLoader, DataLoader]:
-    ds = ZSlicePairDataset(sino_dir=cfg["data"]["sino_dir"], voxel_dir=cfg["data"]["voxel_dir"])
-    n_total = len(ds)
-    n_train = int(n_total * (1.0 - cfg["train"]["val_split"]))
-    n_val = n_total - n_train
-    g = torch.Generator().manual_seed(cfg["train"]["seed"])
-    train_ds, val_ds = random_split(ds, [n_train, n_val], generator=g)
+    """
+    Build train/val loaders.
+    If cfg['train']['val_copy'] == True, use the *same* dataset for both
+    train and val (via two Subset views). Otherwise, split by val_split.
+    """
+    ds = ZSlicePairDataset(
+        sino_dir=cfg["data"]["sino_dir"],
+        voxel_dir=cfg["data"]["voxel_dir"]
+    )
 
-    dl_args = dict(batch_size=cfg["data"]["batch_size"], num_workers=cfg["data"]["num_workers"], pin_memory=True)
-    # Keep original behavior (no shuffle). If desired, set shuffle=True for train_dl.
-    return DataLoader(train_ds, shuffle=False, **dl_args), DataLoader(val_ds, shuffle=False, **dl_args)
+    dl_args = dict(
+        batch_size=cfg["data"]["batch_size"],
+        num_workers=cfg["data"]["num_workers"],
+        pin_memory=True,
+    )
+
+    # --- copy mode: val = copy of train (same indices, separate loaders) ---
+    if bool(cfg["train"].get("val_copy", False)):
+        idx_all = list(range(len(ds)))
+        train_ds = Subset(ds, idx_all)
+        val_ds   = Subset(ds, idx_all)
+        return (
+            DataLoader(train_ds, shuffle=False, **dl_args),
+            DataLoader(val_ds,   shuffle=False, **dl_args),
+        )
+
+    # --- default: split by val_split, but never allow empty splits ---
+    n_total   = len(ds)
+    val_split = float(cfg["train"]["val_split"])
+    n_val     = max(1, min(n_total - 1, int(round(n_total * val_split)))) if n_total >= 2 else 0
+    n_train   = n_total - n_val
+
+    if n_train == 0 or n_val == 0:
+        # fallback: copy mode if split would be empty
+        idx_all = list(range(n_total))
+        train_ds = Subset(ds, idx_all)
+        val_ds   = Subset(ds, idx_all)
+    else:
+        g = torch.Generator().manual_seed(int(cfg["train"]["seed"]))
+        train_ds, val_ds = random_split(ds, [n_train, n_val], generator=g)
+
+    return (
+        DataLoader(train_ds, shuffle=False, **dl_args),
+        DataLoader(val_ds,   shuffle=False, **dl_args),
+    )
 
 def append_metrics_csv(csv_path: Path, epoch: int, tr: Dict[str, float], va: Dict[str, float]) -> None:
     """

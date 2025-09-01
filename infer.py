@@ -136,8 +136,8 @@ def infer_case(
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", type=str, default="results/ckpt/best_script.pt")
-    ap.add_argument("--sino_dir", type=str, default="data/test_sino")
-    ap.add_argument("--voxel_dir", type=str, default="data/test_voxel")
+    ap.add_argument("--sino_dir", type=str, default="data/sino")
+    ap.add_argument("--voxel_dir", type=str, default="data/voxel")
     ap.add_argument("--out_dir", type=str, default="results/infer")
     ap.add_argument("--device", type=str, default="auto", choices=["auto","cuda","cpu"])
     ap.add_argument("--clamp_min", type=float, default=None)

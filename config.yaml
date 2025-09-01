@@ -3,8 +3,8 @@
 data:
   sino_dir: data/sino
   voxel_dir: data/voxel
-  batch_size: 4           # use 1 if spatial sizes vary across cases
-  num_workers: 4
+  batch_size: 1           # use 1 if spatial sizes vary across cases
+  num_workers: 1
 
 model:
   c1d: 64
@@ -28,7 +28,8 @@ optim:
 
 train:
   epochs: 500
-  val_split: 0.2
+  val_split: 1.0
+  val_copy: true
   seed: 2025
   device: auto            # auto | cuda | cpu
   grad_clip: 1.0

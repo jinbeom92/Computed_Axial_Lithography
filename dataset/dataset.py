@@ -108,8 +108,12 @@ class ZSlicePairDataset(Dataset):
         voxel_zy = v_mm[:, :, z]       # (X, Y)
 
         # Channel-first tensors
-        sino_t = torch.from_numpy(np.ascontiguousarray(sino_za)).unsqueeze(0).to(self.dtype)
-        voxel_t = torch.from_numpy(np.ascontiguousarray(voxel_zy)).unsqueeze(0).to(self.dtype)
+        sino_arr  = np.array(sino_za,  copy=True, dtype=np.float32, order="C")
+        voxel_arr = np.array(voxel_zy, copy=True, dtype=np.float32, order="C")
+        sino_t  = torch.from_numpy(sino_arr).unsqueeze(0)
+        voxel_t = torch.from_numpy(voxel_arr).unsqueeze(0)
+        if sino_t.dtype != self.dtype:   sino_t  = sino_t.to(self.dtype)
+        if voxel_t.dtype != self.dtype:  voxel_t = voxel_t.to(self.dtype)
 
         return {
             "sino": sino_t,    # (1, X, A)
