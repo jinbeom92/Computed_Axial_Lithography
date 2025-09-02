@@ -4,7 +4,7 @@ data:
   sino_dir: data/sino
   voxel_dir: data/voxel
   batch_size: 1           # use 1 if spatial sizes vary across cases
-  num_workers: 1
+  num_workers: 4
 
 model:
   c1d: 64
@@ -17,7 +17,7 @@ model:
     train_only: false      # disable cheat on validation/eval
     out_ch: 64
 bp:
-  filter: hamming         # ramp | shepp-logan | cosine | hamming | hann | null
+  filter: hamming         # ramp | shepp-logan | cosine | hamming | hann | None
   output_size: null       # null→use X (detector bins)
 
 optim:
@@ -35,8 +35,8 @@ train:
   grad_clip: 1.0
 
 loss_weights:
-  w_mse: 0.05
-  w_ec:  0.5
+  w_mse: 0.0
+  w_ec:  0.0
   w_ssim: 1.0
 
 save:

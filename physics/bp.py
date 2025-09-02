@@ -67,7 +67,7 @@ def _fourier_filter(size: int, filter_name: str, ref: torch.Tensor) -> torch.Ten
     elif filter_name == "hann":
         win = torch.hann_window(size, periodic=False, dtype=torch.float32)     # CPU
         fourier_filter = fourier_filter * _fftshift_1d_safeslice(win)
-    elif filter_name is None:
+    elif filter_name == "None":
         fourier_filter[:] = 1.0
     else:
         raise ValueError(f"Unknown filter: {filter_name}")
@@ -76,9 +76,9 @@ def _fourier_filter(size: int, filter_name: str, ref: torch.Tensor) -> torch.Ten
     return fourier_filter.to(device=ref.device, dtype=ref.dtype).view(size, 1)
 
 
-def _filter_projections(sino: torch.Tensor, filter_name: str = "hamming") -> torch.Tensor:
+def _filter_projections(sino: torch.Tensor, filter_name: str = "None") -> torch.Tensor:
     """
-    sino: (B,1,X,A) → frequency-domain filtering (Hamming default) → (B,1,X,A)
+    sino: (B,1,X,A) → frequency-domain filtering (ramp default) → (B,1,X,A)
     """
     if sino.ndim != 4 or sino.shape[1] != 1:
         raise RuntimeError("sino must be (B,1,X,A)")

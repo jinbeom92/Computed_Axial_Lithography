@@ -6,18 +6,8 @@ __all__ = ["ContrastLoss"]
 
 
 class ContrastLoss(nn.Module):
-    """
-    TorchScript-friendly edge contrast loss.
-    - Treats V_gt>0 as inside.
-    - Finds the *inner* boundary (inside pixels touching outside).
-    - For each boundary pixel, penalizes if its value is not larger than the
-      maximum of its 3x3 neighborhood **outside** region.
-    Loss = mean over batch of (1 - EC) * 0.5, where EC is the averaged contrast.
-    Shape:
-        R_hat, V_gt: [B, 1, H, W]
-    """
 
-    def __init__(self, void_weight: float = 0.1):
+    def __init__(self, void_weight: float = 0.5):
         super().__init__()
         self.void_weight = float(void_weight)
         ker = torch.ones((1, 1, 3, 3), dtype=torch.float32)
@@ -25,13 +15,7 @@ class ContrastLoss(nn.Module):
         self.register_buffer("ker", ker)
 
     def forward(self, R_hat: torch.Tensor, V_gt: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            R_hat: [B,1,H,W] reconstruction.
-            V_gt : [B,1,H,W] mask-like target (values >0 are inside).
-        Returns:
-            Scalar loss.
-        """
+
         assert R_hat.dim() == 4 and V_gt.dim() == 4 and R_hat.shape == V_gt.shape, \
             "R_hat and V_gt must be [B,1,H,W] and have the same shape."
         assert R_hat.shape[1] == 1, "Channel must be 1."

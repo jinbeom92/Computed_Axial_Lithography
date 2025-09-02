@@ -8,13 +8,6 @@ __all__ = ["SSIMLoss"]
 
 
 class SSIMLoss(nn.Module):
-    """
-    TorchScript-friendly masked SSIM loss (1 - SSIM).
-    - Builds a modified target: inside=1.0, 1-pixel outer ring=`boundary_value`, else=0.0.
-    - SSIM is averaged only over (modified target > 0) region; if empty, uses full image.
-    Shape:
-        R_hat, V_gt: [B, 1, H, W]
-    """
 
     def __init__(
         self,
@@ -24,7 +17,7 @@ class SSIMLoss(nn.Module):
         K1: float = 0.01,
         K2: float = 0.03,
         boundary_value: float = 0.8,
-        void_weight: float = 0.1,
+        void_weight: float = 0.0,
     ):
         super().__init__()
         self.window_size = int(window_size)
@@ -41,13 +34,7 @@ class SSIMLoss(nn.Module):
 
     @torch.jit.export
     def outer_ring_target_and_mask(self, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Args:
-            mask: [B,1,H,W] values >0 treated as inside.
-        Returns:
-            tgt_mod: [B,1,H, W] float32 in {0, boundary_value, 1}
-            eval_mask: [B,1,H,W] bool, where tgt_mod > 0
-        """
+ 
         m = (mask > 0.0)
         inN = m.to(torch.float32)
         cnt_in = F.conv2d(inN, self.ker, padding=1)
@@ -59,7 +46,7 @@ class SSIMLoss(nn.Module):
 
     @torch.jit.export
     def _gaussian_window(self, device: torch.device) -> torch.Tensor:
-        """Return [1,1,ks,ks] normalized 2D Gaussian kernel (float32)."""
+
         ks = self.window_size
         sigma = self.sigma
         coords = torch.arange(ks, dtype=torch.float32, device=device) - (ks - 1.0) / 2.0
@@ -70,13 +57,7 @@ class SSIMLoss(nn.Module):
         return g2d.view(1, 1, ks, ks)
 
     def forward(self, R_hat: torch.Tensor, V_gt: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            R_hat: [B,1,H,W] reconstruction (any dtype, casted to float32 internally).
-            V_gt : [B,1,H,W] mask-like target (values >0 are inside).
-        Returns:
-            Scalar loss = mean over batch of (1 - masked SSIM).
-        """
+
         assert R_hat.dim() == 4 and V_gt.dim() == 4 and R_hat.shape == V_gt.shape, \
             "R_hat and V_gt must be [B,1,H,W] and have the same shape."
         assert R_hat.shape[1] == 1, "Channel must be 1."

@@ -6,7 +6,7 @@ Compatibility:
 - Exposes both class names: `DecoderSino` and `Decoder` (alias).
 
 Input  : (B, C_in, X, A)
-Output : (B, 1,    X, A)  with non-negativity enforced by Softplus.
+Output : (B, 1,    X, A)
 """
 
 from __future__ import annotations
