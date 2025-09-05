@@ -1,29 +1,11 @@
-"""
-Alignment and optional cheat-feature injection.
-
-Inputs:
-- fused_sino : (B, C_in, X, A)   # from Fusion
-- cheat_xy   : (B, Cc,  X, Y)    # from CheatEnc2D (optional)
-
-Output:
-- aligned    : (B, C_out, X, A)
-
-Design:
-- Optional resampling of cheat XY -> XA via bilinear interpolate.
-- 1×1 projections to match channels, then gated additive injection.
-- Residual 3×3 refinement. Gate is learnable in [0,1] via sigmoid.
-"""
-
 from __future__ import annotations
 from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class Residual2D(nn.Module):
-    """Minimal residual 2D block with mandatory skip-connection."""
-
+    """Residual 2D block with GroupNorm and mandatory skip."""
     def __init__(self, in_ch: int, hidden_ch: int, out_ch: int, k: int = 3):
         super().__init__()
         p = k // 2
@@ -33,9 +15,6 @@ class Residual2D(nn.Module):
         self.gn2 = nn.GroupNorm(1, out_ch)
         self.skip = nn.Identity() if in_ch == out_ch else nn.Conv2d(in_ch, out_ch, 1, bias=False)
         self.act = nn.ReLU(inplace=True)
-        self._init()
-
-    def _init(self) -> None:
         nn.init.kaiming_normal_(self.conv1.weight, nonlinearity="linear")
         nn.init.kaiming_normal_(self.conv2.weight, nonlinearity="linear")
         if isinstance(self.skip, nn.Conv2d):
@@ -49,48 +28,52 @@ class Residual2D(nn.Module):
 
 class ALign(nn.Module):
     """
-    Align fused sino features and optionally inject cheat features.
+    Non-interpolating aligner with optional cheat injection (TorchScript-safe).
 
-    Args:
-        in_ch:  channels of fused_sino.
-        out_ch: output channels (defaults to in_ch).
-        cheat_in_ch: channels of cheat_xy (0 disables cheat path).
-        k: kernel size for residual refinement (odd).
+    Policy
+    ------
+    - No XY->XA resampling. Cheat stays on its grid.
+    - Reduce along Y (mean) -> (B,Cc,X,1), replicate across A.
+    - Concatenate [sino, σ(gate)*cheat_broadcast] then 1×1 projection.
+
+    TorchScript note
+    ----------------
+    Guard calls with `self.cat_proj is not None` so the type is refined
+    from Optional[Conv2d] → Conv2d within the branch.
     """
-
     def __init__(self, in_ch: int, out_ch: Optional[int] = None, cheat_in_ch: int = 0, k: int = 3):
         super().__init__()
         out_ch = in_ch if out_ch is None else out_ch
 
         self.proj_in = nn.Identity() if in_ch == out_ch else nn.Conv2d(in_ch, out_ch, 1, bias=False)
-        self.has_cheat = cheat_in_ch > 0
-        self.cheat_proj = nn.Conv2d(cheat_in_ch, out_ch, 1, bias=False) if self.has_cheat else None
-
-        self.gate = nn.Parameter(torch.tensor(0.0))  # sigmoid(gate) ∈ (0,1), starts closed
+        # Optional proj for cheat concat; None when cheat_in_ch == 0
+        self.cat_proj: Optional[nn.Conv2d] = (
+            nn.Conv2d(out_ch + cheat_in_ch, out_ch, 1, bias=False) if cheat_in_ch > 0 else None
+        )
+        self.gate = nn.Parameter(torch.tensor(0.0))
         self.refine = Residual2D(out_ch, out_ch, out_ch, k)
+        self._announced: bool = torch.jit.Attribute(False, bool)
 
         if isinstance(self.proj_in, nn.Conv2d):
             nn.init.kaiming_normal_(self.proj_in.weight, nonlinearity="linear")
-        if self.cheat_proj is not None:
-            nn.init.kaiming_normal_(self.cheat_proj.weight, nonlinearity="linear")
+        if self.cat_proj is not None:
+            nn.init.kaiming_normal_(self.cat_proj.weight, nonlinearity="linear")
 
     def forward(self, fused_sino: torch.Tensor, cheat_xy: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """
-        Args:
-            fused_sino: (B, C_in, X, A)
-            cheat_xy  : (B, Cc,  X, Y) or None
-        """
-        x = self.proj_in(fused_sino)  # -> (B, C_out, X, A)
+        if not self._announced:
+            mode = "script" if torch.jit.is_scripting() else "eager/trace"
+            cheat_enabled = self.cat_proj is not None
+            cheat_active  = cheat_enabled and (cheat_xy is not None)
+            print("[Align]", "mode=", mode, "cheat_enabled=", cheat_enabled, "cheat_active=", cheat_active)
+            self._announced = True
 
-        if self.has_cheat and cheat_xy is not None:
-            # Geometry-agnostic alignment XY -> XA via interpolation.
-            xa = F.interpolate(cheat_xy, size=(x.shape[2], x.shape[3]), mode="bilinear", align_corners=False)
-            xa = self.cheat_proj(xa)  # -> (B, C_out, X, A)
-            g = self.gate.sigmoid()
-            x = x + g * xa
+        x = self.proj_in(fused_sino)
+
+        if (self.cat_proj is not None) and (cheat_xy is not None):
+            c = cheat_xy.mean(dim=3, keepdim=True)
+            c = c.expand(-1, -1, -1, x.shape[3])
+            y = torch.cat((x, self.gate.sigmoid() * c), dim=1)
+            x = self.cat_proj(y)
 
         x = self.refine(x)
         return x
-
-
-__all__ = ["ALign", "Residual2D"]

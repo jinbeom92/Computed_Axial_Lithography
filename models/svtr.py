@@ -27,6 +27,7 @@ import torch.nn.functional as F
 
 import torch
 import torch.nn as nn
+from physics.bp import fbp2d, fbp3d
 
 # ----- local dynamic imports (file names starting with digits) -----
 def _load_local(module_filename: str, module_name: str):
@@ -79,6 +80,7 @@ class SVTR(nn.Module):
         dec_hidden: int = 128,
         bp_filter: str = "hamming",
         bp_out: Optional[int] = None,
+        bp_angle_chunk: int = 0
     ) -> None:
         super().__init__()
         self.enc1d   = Enc1D(out_ch=c1d)
@@ -92,19 +94,22 @@ class SVTR(nn.Module):
         self.bp_filter = bp_filter
         self.bp_out    = bp_out
         self.skip_alpha = nn.Parameter(torch.tensor(0.0))
+        self.bp_angle_chunk = int(bp_angle_chunk)
 
     def _forward_4d(self, sino_xa: torch.Tensor, cheat_xy: Optional[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         """Core pipeline for one z-slice batch: (B,1,X,A)[,(B,1,X,Y)] → (sino_opt,recon_opt)."""
         f1 = self.enc1d(sino_xa)                 # (B,C1,X,A)
         f2 = self.enc2d(sino_xa)                 # (B,C2,X,A)
         f  = self.fusion(f1, f2)                 # (B,F,X,A)
-        cfeat = self.cheat_enc(cheat_xy) if (self.cheat and cheat_xy is not None) else None
+        cfeat = torch.jit.annotate(Optional[torch.Tensor], None)
+        if (self.cheat_enc is not None) and (cheat_xy is not None):
+            cfeat = self.cheat_enc(cheat_xy)
         a  = self.align(f, cfeat)                # (B,Ao,X,A)
         sino_opt = self.decoder(a)               # (B,1,X,A)  ≥ 0
-        sino_pred = self.decoder(a)
-        sino_opt = torch.clamp(sino_pred + self.skip_alpha * sino_xa, min=0.0)  # (B,1,X,A)
-        recon_opt = fbp2d(sino_opt, output_size=self.bp_out, filter_name=self.bp_filter)
-        recon_opt = recon_opt.clamp(0, 1)
+        # sino_pred = self.decoder(a)
+        # sino_opt = F.relu(sino_pred + self.skip_alpha * sino_xa)  # (B,1,X,A)
+        recon_opt = fbp2d(sino_opt, output_size=self.bp_out, filter_name=self.bp_filter, angle_chunk=self.bp_angle_chunk)
+        recon_opt = recon_opt / torch.amax(recon_opt, dim=(2, 3), keepdim=True)
         return sino_opt, recon_opt
 
     def forward(self, sino_xa: torch.Tensor, cheat_xy: Optional[torch.Tensor] = None):
@@ -128,6 +133,6 @@ class SVTR(nn.Module):
 
         so4, _ = self._forward_4d(s4, c4)
         sino_opt_5d = so4.reshape(B, Z, 1, X, A).permute(0, 2, 3, 4, 1)  # (B,1,X,A,Z)
-        recon_5d = fbp3d(sino_opt_5d, output_size=self.bp_out, filter_name=self.bp_filter)
-        recon_5d = recon_5d.clamp(0,1)
+        recon_5d = fbp3d(sino_opt_5d, output_size=self.bp_out, filter_name=self.bp_filter, angle_chunk=self.bp_angle_chunk)
+        recon_5d = recon_5d / torch.amax(recon_5d, dim=(2, 3), keepdim=True)
         return sino_opt_5d, recon_5d

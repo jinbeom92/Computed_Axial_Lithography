@@ -16,7 +16,7 @@ class SSIMLoss(nn.Module):
         data_range: float = 1.0,
         K1: float = 0.01,
         K2: float = 0.03,
-        boundary_value: float = 0.8,
+        boundary_value: float = 0.81,
         void_weight: float = 0.0,
     ):
         super().__init__()

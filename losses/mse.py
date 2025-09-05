@@ -7,7 +7,7 @@ __all__ = ["MSELoss"]
 
 class MSELoss(nn.Module):
 
-    def __init__(self, boundary_value: float = 0.8, void_weight: float = 0.0):
+    def __init__(self, boundary_value: float = 0.81, void_weight: float = 0.0):
         super().__init__()
         self.boundary_value = float(boundary_value)
         self.void_weight = float(void_weight)

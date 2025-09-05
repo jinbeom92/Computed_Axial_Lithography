@@ -51,11 +51,13 @@ def make_loaders(cfg: Dict) -> Tuple[DataLoader, DataLoader]:
         sino_dir=cfg["data"]["sino_dir"],
         voxel_dir=cfg["data"]["voxel_dir"]
     )
-
+    nw = int(cfg["data"]["num_workers"])
     dl_args = dict(
         batch_size=cfg["data"]["batch_size"],
-        num_workers=cfg["data"]["num_workers"],
+        num_workers=nw,
         pin_memory=True,
+        persistent_workers=(nw > 0),
+        prefetch_factor=int(cfg["data"].get("prefetch_factor", 2)) if nw > 0 else None,
     )
 
     # --- copy mode: val = copy of train (same indices, separate loaders) ---
@@ -130,7 +132,7 @@ class LiveBPViewer:
             self.ax.set_title(title)
 
         self.fig.canvas.draw_idle()
-        plt.pause(0.001)  # non-blocking UI refresh
+        plt.pause(1)  # non-blocking UI refresh
 
 def build_model(cfg: Dict) -> SVTR:
     mcfg = cfg["model"]
@@ -145,6 +147,7 @@ def build_model(cfg: Dict) -> SVTR:
         dec_hidden=mcfg["decoder_hidden"],
         bp_filter=bpcfg["filter"],
         bp_out=bpcfg["output_size"],
+        bp_angle_chunk=int(bpcfg.get("angle_chunk", 0)),
     )
 
 
@@ -158,12 +161,12 @@ def build_losses(cfg: Dict, device: torch.device) -> Dict[str, nn.Module]:
         data_range=float(ssim_cfg.get("data_range", 1.0)),
         K1=float(ssim_cfg.get("K1", 0.01)),
         K2=float(ssim_cfg.get("K2", 0.03)),
-        boundary_value=float(ssim_cfg.get("boundary_value", 0.8)),
+        boundary_value=float(ssim_cfg.get("boundary_value", 0.81)),
         void_weight=vw,
     ).to(device)
 
     # MSE uses the same boundary_value by default
-    mse_loss = MSELoss(boundary_value=float(ssim_cfg.get("boundary_value", 0.8)), void_weight=vw).to(device)
+    mse_loss = MSELoss(boundary_value=float(ssim_cfg.get("boundary_value", 0.81)), void_weight=vw).to(device)
 
     ec_loss = ContrastLoss(void_weight=vw).to(device)
 
@@ -171,7 +174,7 @@ def build_losses(cfg: Dict, device: torch.device) -> Dict[str, nn.Module]:
 
 
 def to_device(batch: Dict, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
-    return batch["sino"].to(device), batch["voxel"].to(device)
+    return batch["sino"].to(device, non_blocking=True), batch["voxel"].to(device, non_blocking=True)
 
 
 def run_epoch(
@@ -245,7 +248,13 @@ def export_torchscript(model, example_sino, example_voxel):
         warnings.filterwarnings("ignore", category=TracerWarning)
         m = copy.deepcopy(model).cpu().eval()
         ex_s = example_sino.detach().cpu()
-        ex_v = example_voxel.detach().cpu() if example_voxel is not None else None
+
+        if example_voxel is None:
+            B, _, X, A = ex_s.shape
+            ex_v = torch.zeros(B, 1, X, X, dtype=ex_s.dtype)
+        else:
+            ex_v = example_voxel.detach().cpu()
+
         scripted = torch.jit.trace(m, (ex_s, ex_v), strict=False)
         return scripted
 
@@ -315,6 +324,8 @@ def main() -> None:
 
         # Save best by val loss (fix: use 'loss' key, not a non-existent 'val_ssim')
         if va["loss"] < best_val:
+            import numpy as np
+            np.save(rf"C:\Users\enf31\Desktop\SK_Hynix_Project\results\total_recon\recon_opt_total.npy", ro.detach().cpu().numpy())
             best_val = va["loss"]
             scripted.save(str(ckpt_dir / "best_script.pt"))
 

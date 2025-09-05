@@ -7,7 +7,7 @@ __all__ = ["ContrastLoss"]
 
 class ContrastLoss(nn.Module):
 
-    def __init__(self, void_weight: float = 0.5):
+    def __init__(self, void_weight: float = 0.0):
         super().__init__()
         self.void_weight = float(void_weight)
         ker = torch.ones((1, 1, 3, 3), dtype=torch.float32)
