@@ -9,11 +9,11 @@ TRUST_TOPOLOGY     = True   # If True, assume STL is watertight (recommended).
 FIX_SMALL_GAPS_3D  = False  # If True, apply 3D closing to fill small gaps (default False to preserve holes).
 
 # --- Paths ---
-STL_DIR     = r"C:\Users\ICTCOC\Downloads\stl_data_t"   # Input STL directory
-VOXEL_DIR   = "data_t1/original/voxel"                  # Output directory for voxel npy files
-SINO_DIR    = "data_t1/original/sino"                   # Output directory for sino npy files
-LOG_FILE    = "data_t1/process_log.csv"                 # Log file path
-ERROR_LOG   = "data_t1/error_log.txt"                   # Error log path
+STL_DIR     = r"C:\Users\ICTCOC\Downloads\stl_data_0000_0999"   # Input STL directory
+VOXEL_DIR   = "data/original/voxel"                  # Output directory for voxel npy files
+SINO_DIR    = "data/original/sino"                   # Output directory for sino npy files
+LOG_FILE    = "data/process_log.csv"                 # Log file path
+ERROR_LOG   = "data/error_log.txt"                   # Error log path
 
 RESOLUTION = 256      # XY resolution for voxelization
 NUM_ANGLES = 180      # Number of projection angles
