@@ -1,17 +1,3 @@
-"""
-AdamW optimizer builder with sane param-grouping.
-
-Features
-- Decoupled weight decay (AdamW) with two groups:
-  1) decay: all weights except normalization layers and biases
-  2) no_decay: normalization params and biases (weight_decay=0.0)
-- Optional fused AdamW when available (PyTorch ≥ 2.0, CUDA).
-
-Usage
--------
-opt = build_adamw(model, lr=1e-3, weight_decay=0.01)
-"""
-
 from __future__ import annotations
 import torch
 import torch.nn as nn
@@ -33,20 +19,7 @@ def build_adamw(
     eps: float = 1e-8,
     fused: bool | None = None,
 ) -> torch.optim.Optimizer:
-    """
-    Create AdamW with bias/norm excluded from weight decay.
 
-    Args:
-        model: nn.Module whose parameters will be optimized.
-        lr: learning rate.
-        weight_decay: L2 weight decay applied only to the "decay" group.
-        betas: Adam betas.
-        eps: Adam epsilon.
-        fused: if None, auto-enable when supported on CUDA; otherwise use given flag.
-
-    Returns:
-        torch.optim.AdamW instance with two param groups.
-    """
     no_decay_params = set()
     for m in model.modules():
         if isinstance(m, _NORM_TYPES):

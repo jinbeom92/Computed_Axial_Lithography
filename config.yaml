@@ -1,9 +1,7 @@
-# Minimal, YAML-driven config for SVTR training
-
 data:
   sino_dir: data/sino
   voxel_dir: data/voxel
-  batch_size: 4           # use 1 if spatial sizes vary across cases
+  batch_size: 4
   num_workers: 4
   prefetch_factor: 4
 
@@ -14,12 +12,12 @@ model:
   align_out: 64
   decoder_hidden: 128
   cheat:
-    enabled: true        # true to enable cheat encoder injection
-    train_only: false      # disable cheat on validation/eval
+    enabled: true
+    train_only: false
     out_ch: 64
 bp:
   filter: None         # ramp | shepp-logan | cosine | hamming | hann | None
-  output_size: null       # null→use X (detector bins)
+  output_size: null
   angle_chunk: 32
 
 optim:

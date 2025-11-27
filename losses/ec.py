@@ -11,7 +11,7 @@ class ContrastLoss(nn.Module):
         super().__init__()
         self.void_weight = float(void_weight)
         ker = torch.ones((1, 1, 3, 3), dtype=torch.float32)
-        ker[0, 0, 1, 1] = 0.0  # 8-neighborhood, no center
+        ker[0, 0, 1, 1] = 0.0
         self.register_buffer("ker", ker)
 
     def forward(self, R_hat: torch.Tensor, V_gt: torch.Tensor) -> torch.Tensor:
@@ -21,23 +21,21 @@ class ContrastLoss(nn.Module):
         assert R_hat.shape[1] == 1, "Channel must be 1."
 
         x = R_hat
-        m = (V_gt > 0.0)  # inside
+        m = (V_gt > 0.0)
         outN = (~m).to(dtype=x.dtype)
 
         ker = self.ker.to(device=x.device, dtype=x.dtype)
 
-        # inner boundary: inside pixels with at least one outside neighbor
         cnt_out = F.conv2d(outN, ker, padding=1)
         ib = m & (cnt_out > 0)
 
-        # maximum of outside region in 3x3 neighborhood
         x_out = x * outN
         max_out = F.max_pool2d(x_out, kernel_size=3, stride=1, padding=1)
 
         contrast = (x - max_out) * ib.to(dtype=x.dtype)
 
-        num = ib.to(dtype=x.dtype).sum(dim=(2, 3))          # (B,1)
-        sum_contrast = contrast.sum(dim=(2, 3))             # (B,1)
+        num = ib.to(dtype=x.dtype).sum(dim=(2, 3))
+        sum_contrast = contrast.sum(dim=(2, 3))
 
         ec = torch.where(num > 0.0, sum_contrast / num.clamp_min(1.0), torch.ones_like(sum_contrast))
 

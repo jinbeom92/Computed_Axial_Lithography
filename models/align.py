@@ -2,10 +2,8 @@ from __future__ import annotations
 from typing import Optional
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 class Residual2D(nn.Module):
-    """Residual 2D block with GroupNorm and mandatory skip."""
     def __init__(self, in_ch: int, hidden_ch: int, out_ch: int, k: int = 3):
         super().__init__()
         p = k // 2
@@ -27,26 +25,11 @@ class Residual2D(nn.Module):
 
 
 class ALign(nn.Module):
-    """
-    Non-interpolating aligner with optional cheat injection (TorchScript-safe).
-
-    Policy
-    ------
-    - No XY->XA resampling. Cheat stays on its grid.
-    - Reduce along Y (mean) -> (B,Cc,X,1), replicate across A.
-    - Concatenate [sino, σ(gate)*cheat_broadcast] then 1×1 projection.
-
-    TorchScript note
-    ----------------
-    Guard calls with `self.cat_proj is not None` so the type is refined
-    from Optional[Conv2d] → Conv2d within the branch.
-    """
     def __init__(self, in_ch: int, out_ch: Optional[int] = None, cheat_in_ch: int = 0, k: int = 3):
         super().__init__()
         out_ch = in_ch if out_ch is None else out_ch
 
         self.proj_in = nn.Identity() if in_ch == out_ch else nn.Conv2d(in_ch, out_ch, 1, bias=False)
-        # Optional proj for cheat concat; None when cheat_in_ch == 0
         self.cat_proj: Optional[nn.Conv2d] = (
             nn.Conv2d(out_ch + cheat_in_ch, out_ch, 1, bias=False) if cheat_in_ch > 0 else None
         )

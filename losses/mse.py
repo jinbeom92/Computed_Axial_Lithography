@@ -12,7 +12,7 @@ class MSELoss(nn.Module):
         self.boundary_value = float(boundary_value)
         self.void_weight = float(void_weight)
         ker = torch.ones((1, 1, 3, 3), dtype=torch.float32)
-        ker[0, 0, 1, 1] = 0.0  # 8-neighborhood, no center
+        ker[0, 0, 1, 1] = 0.0
         self.register_buffer("ker", ker)
 
     @torch.jit.export
@@ -23,7 +23,6 @@ class MSELoss(nn.Module):
         cnt_in = F.conv2d(inN, self.ker, padding=1)
         outer_ring = (~m) & (cnt_in > 0)
         gt_mod = inN.clone()
-        # Fill the 1-pixel outer ring
         gt_mod.masked_fill_(outer_ring, self.boundary_value)
         return gt_mod
 

@@ -1,21 +1,9 @@
-"""
-Sino decoder that maps aligned sino features to sino_opt (>= 0).
-
-Compatibility:
-- Accepts both `hidden` and `hidden_ch` keyword args.
-- Exposes both class names: `DecoderSino` and `Decoder` (alias).
-
-Input  : (B, C_in, X, A)
-Output : (B, 1,    X, A)
-"""
-
 from __future__ import annotations
 import torch
 import torch.nn as nn
 
 
 class Residual2D(nn.Module):
-    """Residual 2D block with GroupNorm + RELU and mandatory skip."""
     def __init__(self, in_ch: int, hidden_ch: int, out_ch: int, k: int = 3):
         super().__init__()
         p = k // 2
@@ -37,14 +25,6 @@ class Residual2D(nn.Module):
 
 
 class DecoderSino(nn.Module):
-    """
-    Decode aligned sino features into sino_opt.
-
-    Args:
-        in_ch: input channels from ALign/Fusion
-        hidden / hidden_ch: internal channel width (either name is accepted)
-        k: conv kernel size (odd recommended)
-    """
     def __init__(self, in_ch: int, hidden: int | None = None, *, hidden_ch: int | None = None, k: int = 3):
         super().__init__()
         h = hidden if hidden is not None else (hidden_ch if hidden_ch is not None else 128)
@@ -61,8 +41,6 @@ class DecoderSino(nn.Module):
         x = self.head(x)
         return self.pos(x)
 
-
-# Backward/forward compatible alias
 Decoder = DecoderSino
 
 __all__ = ["DecoderSino", "Decoder", "Residual2D"]

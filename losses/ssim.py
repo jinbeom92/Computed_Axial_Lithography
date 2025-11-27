@@ -29,7 +29,7 @@ class SSIMLoss(nn.Module):
         self.void_weight = float(void_weight)
 
         ker = torch.ones((1, 1, 3, 3), dtype=torch.float32)
-        ker[0, 0, 1, 1] = 0.0  # 8-neighborhood, no center
+        ker[0, 0, 1, 1] = 0.0
         self.register_buffer("ker", ker)
 
     @torch.jit.export
@@ -67,7 +67,6 @@ class SSIMLoss(nn.Module):
         y = tgt_mod.to(dtype=torch.float32, device=x.device)
         m = m_bool.to(dtype=torch.float32, device=x.device)
 
-        # If mask is empty for a sample, use full image for that sample.
         mask_sum = m.sum(dim=(1, 2, 3), keepdim=True)
         m_eff = torch.where(mask_sum > 0.0, m, torch.ones_like(m))
 
