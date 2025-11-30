@@ -12,7 +12,8 @@ class Residual2D(nn.Module):
         self.conv2 = nn.Conv2d(hidden_ch, out_ch, k, padding=p, bias=False)
         self.gn2 = nn.GroupNorm(1, out_ch)
         self.skip = nn.Identity() if in_ch == out_ch else nn.Conv2d(in_ch, out_ch, 1, bias=False)
-        self.act = nn.ReLU(inplace=True)
+        # self.act = nn.ReLU(inplace=True)
+        self.act = nn.PReLU()
         self._init()
 
     def _init(self) -> None:
@@ -34,7 +35,8 @@ class Fusion(nn.Module):
         self.alpha2 = nn.Parameter(torch.tensor(1.0))
         self.proj = nn.Conv2d(c1 + c2, out_ch, kernel_size=1, bias=False)
         self.gn = nn.GroupNorm(1, out_ch)
-        self.act = nn.ReLU(inplace=True)
+        # self.act = nn.ReLU(inplace=True)
+        self.act = nn.PReLU()
         self.refine = Residual2D(out_ch, out_ch, out_ch, k)
         self._init()
 

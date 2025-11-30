@@ -12,7 +12,8 @@ class Residual2D(nn.Module):
         self.conv2 = nn.Conv2d(hidden_ch, out_ch, kernel_size=k, padding=p, bias=False)
         self.gn2 = nn.GroupNorm(1, out_ch)
         self.skip = nn.Identity() if in_ch == out_ch else nn.Conv2d(in_ch, out_ch, 1, bias=False)
-        self.act = nn.ReLU(inplace=True)
+        # self.act = nn.ReLU(inplace=True)
+        self.act = nn.PReLU()
         self._init()
 
     def _init(self) -> None:

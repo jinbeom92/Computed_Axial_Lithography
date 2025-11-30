@@ -21,13 +21,13 @@ bp:
   angle_chunk: 32
 
 optim:
-  lr: 1.0e-3
-  weight_decay: 1.0e-2
+  lr: 1.0e-2
+  weight_decay: 1.0e-5
   betas: [0.9, 0.999]
   eps: 1.0e-8
 
 train:
-  epochs: 10
+  epochs: 1000
   val_split: 0.0
   val_copy: false
   seed: 2025
@@ -35,9 +35,12 @@ train:
   grad_clip: 1.0
 
 loss_weights:
-  w_mse: 0.1
-  w_ec:  0.5
-  w_ssim: 0.5
+  w_mse: 1.0
+  w_ec:  0.3
+  w_ssim: 0.7
+  w_psf: 0.1
+  w_tv: 0.002
+  w_gdl: 0.01
 
 save:
   dir: results/ckpt

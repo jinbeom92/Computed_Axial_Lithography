@@ -17,6 +17,10 @@ from opt.opt import build_adamw
 from losses.ssim import SSIMLoss
 from losses.mse import MSELoss
 from losses.ec import ContrastLoss
+from losses.psf import PSFLoss
+from losses.tv import TVLoss
+from losses.gdl import GDLLoss
+
 
 
 def load_cfg(path: str):
@@ -121,7 +125,7 @@ def build_model(cfg: Dict) -> MDC:
 
 
 def build_losses(cfg: Dict, device: torch.device) -> Dict[str, nn.Module]:
-    vw = float(cfg.get("losses", {}).get("void_weight", 0.0))
+    vw = float(cfg.get("losses", {}).get("void_weight", 0.05))
     ssim_cfg = cfg.get("ssim", {})
     ssim_loss = SSIMLoss(
         window_size=int(ssim_cfg.get("window_size", 11)),
@@ -136,8 +140,17 @@ def build_losses(cfg: Dict, device: torch.device) -> Dict[str, nn.Module]:
     mse_loss = MSELoss(boundary_value=float(ssim_cfg.get("boundary_value", 0.81)), void_weight=vw).to(device)
 
     ec_loss = ContrastLoss(void_weight=vw).to(device)
+    
+    psf_loss = PSFLoss(
+        data_range=float(ssim_cfg.get("data_range", 1.0)),
+        void_weight=vw,
+    ).to(device)
+    
+    tv_loss = TVLoss(void_weight=vw).to(device)
+    
+    gdl_loss = GDLLoss(void_weight=vw).to(device)
 
-    return {"ssim": ssim_loss, "mse": mse_loss, "ec": ec_loss}
+    return {"ssim": ssim_loss, "mse": mse_loss, "ec": ec_loss, "psf": psf_loss, "tv": tv_loss, "gdl": gdl_loss}
 
 
 def to_device(batch: Dict, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -163,20 +176,27 @@ def run_epoch(
     crit_ssim = losses["ssim"]
     crit_mse  = losses["mse"]
     crit_ec   = losses["ec"]
+    crit_psf = losses["psf"]
+    crit_tv = losses["tv"]
+    crit_gdl = losses["gdl"]
 
     pbar = tqdm(loader, desc="Train" if train else "Val", leave=False)
+    
     for batch in pbar:
         sino, voxel_raw = to_device(batch, device)
         voxel = as_inside_mask(voxel_raw)
         cheat_in = voxel if use_cheat else None
-
         sino_opt, recon_opt = model(sino, cheat_in)
 
         l_ssim = crit_ssim(recon_opt, voxel)
         l_mse  = crit_mse(recon_opt, voxel)
         l_ec   = crit_ec(recon_opt, voxel)
+        l_psf = crit_psf(recon_opt, voxel)
+        l_tv = crit_tv(recon_opt, voxel)
+        l_gdl = crit_gdl(recon_opt, voxel)
 
-        total = w["w_ssim"] * l_ssim + w["w_mse"] * l_mse + w["w_ec"] * l_ec
+        total = (w["w_ssim"] * l_ssim + w["w_mse"] * l_mse + w["w_ec"] * l_ec +
+                 w.get("w_pfs",0.1) * l_psf + w.get("w_tv",0.05) * l_tv + w.get("w_gdl",0.05) * l_gdl)
 
         if train:
             opt.zero_grad(set_to_none=True)
@@ -246,6 +266,12 @@ def main() -> None:
     )
 
     losses = build_losses(cfg, device)
+    
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        opt, 
+        T_max=cfg["train"]["epochs"],
+        eta_min=1e-6
+    )
 
     best_val = float("inf")
     ckpt_dir = Path(cfg["save"]["dir"])
@@ -253,10 +279,16 @@ def main() -> None:
     
     csv_path = ckpt_dir / "train_log.csv"
     viewer = LiveBPViewer()
+    
+    print(f"[Scheduler Config]")
+    print(f"  Initial LR: {cfg['optim']['lr']:.2e}")
+    print(f"  Min LR (eta_min): {scheduler.eta_min:.2e}")
+    print(f"  T_max (total epochs): {scheduler.T_max}")
+    print(f"  Schedule: CosineAnnealingLR")
 
     for epoch in range(1, cfg["train"]["epochs"] + 1):
-        tr = run_epoch(model, train_loader, opt, cfg, device, train=True,  losses=losses)
-        va = run_epoch(model, val_loader,   opt, cfg, device, train=False, losses=losses)
+        tr = run_epoch(model, train_loader, opt, cfg, device, train=True, losses=losses)
+        va = run_epoch(model, val_loader, opt, cfg, device, train=False, losses=losses)
 
         print(f"[Epoch {epoch:03d}] "
               f"train_loss={tr['loss']:.4f} val_loss={va['loss']:.4f} "
@@ -265,6 +297,12 @@ def main() -> None:
               f"train_ec={tr['ec']:.4f} val_ec={va['ec']:.4f}")
         
         append_metrics_csv(csv_path, epoch, tr, va)
+
+        current_lr_before = opt.param_groups[0]['lr']
+        scheduler.step()
+        current_lr_after = opt.param_groups[0]['lr']
+        
+        print(f"  [Scheduler] Before: {current_lr_before:.2e} → After: {current_lr_after:.2e}")
 
         with torch.no_grad():
             try:
@@ -280,14 +318,20 @@ def main() -> None:
             except Exception as e:
                 print(f"[viz] skip BP preview: {e}")
 
+        try:
             scripted = export_torchscript(model, ex_sino, ex_vox)
             scripted.save(str(ckpt_dir / "last_script.pt"))
+        except Exception as e:
+            print(f"[export] TorchScript save failed: {e}")
 
         if va["loss"] < best_val:
             import numpy as np
             np.save(rf"C:\Users\enf31\Desktop\SK_Hynix_Project\results\total_recon\recon_opt_total.npy", ro.detach().cpu().numpy())
             best_val = va["loss"]
-            scripted.save(str(ckpt_dir / "best_script.pt"))
+            try:
+                scripted.save(str(ckpt_dir / "best_script.pt"))
+            except Exception as e:
+                print(f"[export] best TorchScript save failed: {e}")
 
 if __name__ == "__main__":
     main()

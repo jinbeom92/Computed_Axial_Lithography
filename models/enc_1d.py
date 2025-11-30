@@ -12,7 +12,8 @@ class Residual1D(nn.Module):
         self.conv2 = nn.Conv1d(hidden_ch, out_ch, k, padding=pad, bias=False)
         self.gn2 = nn.GroupNorm(num_groups=max(1, min(gn_groups, out_ch)), num_channels=out_ch)
         self.skip = nn.Identity() if in_ch == out_ch else nn.Conv1d(in_ch, out_ch, 1, bias=False)
-        self.act = nn.ReLU(inplace=True)
+        # self.act = nn.ReLU(inplace=True)
+        self.act = nn.PReLU()
 
         self._init()
 

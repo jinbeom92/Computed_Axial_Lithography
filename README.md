@@ -1,113 +1,85 @@
 # MDC: Multi-Dimensional Cheat Reconstruction Network
 
 ## Overview
-
-**MDC (Multi-Dimensional Cheat)** is a novel physics-informed tomographic reconstruction architecture that combines
-1D line-profile encoding, 2D global sinogram encoding, voxel-domain hints, and a differentiable filtered back-projection (FBP) layer.
-This design achieves **46.38% performance improvement over OSMO** in our experiments, while preserving spatial resolution and ensuring physical consistency.
-
----
+MDC is a physics-informed tomographic reconstruction architecture that combines multi-dimensional encoding, voxel-domain hints, and a differentiable filtered back-projection (FBP) layer.  
+It **achieves 46.38% improvement over OSMO**, while preserving spatial resolution and ensuring physical consistency.
 
 ## Key Features
 
-* **Dual Encoder Design**
+- Dual Encoder Design  
+  - Enc1D: Captures local line-profile details from each projection line.  
+  - Enc2D: Learns global structures directly from the sinogram plane.  
 
-  * **Enc1D**: Processes each projection line (X) independently for every angle (A), capturing fine **local line-profile details**.
-  * **Enc2D**: Learns **global spatial structures** directly from the (X,A) sinogram plane.
+- Fusion Module  
+  - Combines Enc1D/Enc2D features with adaptive weighting.  
 
-* **Fusion Module**
+- CheatEnc2D  
+  - Provides voxel-domain hints to stabilize alignment without interpolation.  
 
-  * Concatenates Enc1D/Enc2D features and projects them via learnable scalars (α₁, α₂) for adaptive weighting.
+- ALign Module  
+  - Aligns fused features with optional cheat injection.  
 
-* **CheatEnc2D (Voxel-domain hint)**
+- Decoder  
+  - Residual 2D blocks projecting to non-negative sinogram output.  
 
-  * Encodes XY-plane voxel slices.
-  * Reduced along Y (mean) → broadcast along A, **avoiding interpolation artifacts**.
-  * Provides a stable alignment anchor without information loss.
-
-* **ALign Module**
-
-  * Aligns fused sinogram features with optional cheat features using non-interpolating concatenation + residual refinement.
-
-* **Decoder**
-
-  * Two Residual2D blocks + 1×1 projection head.
-  * Enforces non-negative **sino\_opt** output.
-
-* **Physics-informed FBP**
-
-  * Torch-only differentiable inverse Radon (FBP) layer with Hamming filter.
-  * Ensures physical consistency between predicted sinograms and reconstructions.
-
-* **Loss Functions**
-
-  * **MSE** with boundary soft-target (0.81).
-  * **SSIM** with masked boundary emphasis.
-  * **Contrast Loss (EC)** to maximize internal-external edge contrast.
-  * This combination stabilizes training and reduces overshoot/halo artifacts.
-
----
+- Physics-informed FBP  
+  - Differentiable inverse Radon layer ensures physical consistency.
 
 ## Processing Pipeline
 
-1. **Input**: Sinogram `(X,A,Z)`, Voxel `(X,Y,Z)` slices.
-2. **Encoders**:
+1. Input  
+   - Sinogram: (X, A, Z)  
+   - Voxel: (X, Y, Z) slices  
 
-   * Enc1D (local line features)
-   * Enc2D (global plane features)
-   * CheatEnc2D (voxel XY hints, optional)
-3. **Fusion + Align**: Combine Enc1D/Enc2D → Align with optional cheat injection.
-4. **Decoder**: Predict **sino\_opt ≥ 0**.
-5. **FBP**: Apply differentiable FBP → output normalized recon `(H,H,Z)`.
-6. **Loss**: MSE + SSIM + EC.
+2. Encoders  
+   - Extract local (Enc1D) and global (Enc2D) features from the sinogram.  
 
----
+3. Fusion + Align  
+   - Fuse Enc1D/Enc2D features with optional voxel-domain cheat injection.  
+
+4. Decoder  
+   - Predict optimized sinogram: `sino_opt ≥ 0`.  
+
+5. FBP  
+   - Apply differentiable FBP → output normalized reconstruction: (H, H, Z).  
+
+6. Loss  
+   - MSE + SSIM + Contrast Loss for boundary and edge preservation.
 
 ## Inference
 
-* **TorchScript support**:
-  Models are exported with `torch.jit.script` or `trace` fallback.
-* **5D fast path**: Batched reconstruction `(B,1,X,A,Z)`.
-* **Fallback loop**: Per-slice inference if checkpoint traced on 4D only.
-* **Outputs**:
+- TorchScript supported  
+  - `torch.jit.script` / trace fallback  
 
-  * `sino_opt.npy` (optimized sinograms)
-  * `recon_opt.npy` (final reconstructions)
-  * Mid-slice PNG visualizations for quick inspection.
+- Batched 5D reconstruction  
+  - Input: `(B, 1, X, A, Z)`  
 
----
-
-## Differentiation from U-Net and Others
-
-* **Unlike U-Net**:
-
-  * No down/upsampling; **stride=1, same padding** preserves resolution.
-  * MDC integrates physics (FBP) directly in the pipeline, ensuring interpretability.
-
-* **Unlike OSMO / FBPConvNet**:
-
-  * MDC optimizes the **sinogram first**, then reconstructs, instead of post-FBP image correction.
-  * Achieved **46.38% improvement over OSMO** in our benchmarks.
-
-* **Unique Contribution**:
-
-  * **Multi-dimensional encoding** (1D+2D)
-  * **Cheat injection without interpolation**
-  * **Physics-informed reconstruction with boundary-aware loss design**
-
----
+- Outputs  
+  - `sino_opt.npy`: optimized sinograms  
+  - `recon_opt.npy`: final reconstructions  
+  - Optional mid-slice visualizations
 
 ## Results
 
-* **Performance**: +46.38% improvement compared to OSMO.
-* **Qualitative**: Sharper edges, reduced halo/ring artifacts, improved structural fidelity.
-* **Efficiency**: Memory-efficient, TorchScript-ready, GPU-accelerated.
+- Performance  
+  - +46.38% over OSMO  
 
----
+- Qualitative  
+  - Sharper edges  
+  - Reduced halo/ring artifacts  
 
-## Citation
+- Efficiency  
+  - Memory-efficient  
+  - GPU-accelerated  
+  - TorchScript-ready
 
-If you use MDC in your work, please cite:
+## License & Citation
+
+Copyright (c) 2025 **jinbeom92**  
+All rights reserved. Redistribution or use without permission is prohibited.
+
+If you use MDC in your work, please cite this repository.
+
 
 ---
 ## Architecture
